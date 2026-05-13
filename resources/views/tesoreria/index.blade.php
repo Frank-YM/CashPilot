@@ -672,8 +672,11 @@ async function loadMovimientos(page = 1) {
 function openMovimientoForm(data = null) {
     const isEdit = !!data;
     const empresas = allEmpresas;
-    const categorias = allCategorias.filter(c => c.tipo === (data?.tipo === 'INGRESO' || data?.tipo === 'AJUSTE_ENTRADA' ? 'INGRESO' : 'GASTO'));
+    const todasCategorias = allCategorias;
     const cuentasDisponibles = data ? cuentasForMov.filter(c => c.empresa_id == data.empresa_id) : [];
+    
+    // Get the naturaleza from existing data or null for new
+    const naturalezaActual = data ? (data.tipo === 'INGRESO' || data.tipo === 'TRANSFERENCIA_ENTRADA' || data.tipo === 'AJUSTE_ENTRADA' ? 'INGRESO' : 'GASTO') : null;
     
     openModal(isEdit ? 'Editar Movimiento' : 'Nuevo Movimiento', `
         <form onsubmit="saveMovimiento(event, ${isEdit ? data.id : 'null'})">
@@ -681,7 +684,7 @@ function openMovimientoForm(data = null) {
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Empresa *</label>
-                        <select id="mov-empresa-form" required class="w-full px-3 py-2 border rounded-lg" onchange="onEmpresaChange()">
+                        <select id="mov-empresa-form" required class="w-full px-3 py-2 border rounded-lg" onchange="onEmpresaChangeForMov()">
                             <option value="">Seleccionar</option>
                             ${empresas.map(e => `<option value="${e.id}" ${data?.empresa_id == e.id ? 'selected' : ''}>${e.nombre}</option>`).join('')}
                         </select>
@@ -694,71 +697,209 @@ function openMovimientoForm(data = null) {
                         </select>
                     </div>
                 </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Concepto / Categoría *</label>
+                    <div id="categoria-cards-container" class="grid grid-cols-3 gap-2 mb-2 max-h-48 overflow-y-auto"></div>
+                    <button type="button" onclick="openMiniCategoriaForm()" class="mt-2 w-full px-3 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:text-blue-500 transition-colors">+ Nuevo concepto</button>
+                    <p id="categoria-error" class="text-red-500 text-sm mt-1 hidden">Selecciona un concepto</p>
+                </div>
+                
+                <div id="mini-categoria-form" class="hidden bg-gray-50 rounded-lg p-4 mb-4 border">
+                    <h4 class="text-sm font-medium mb-3">Nuevo Concepto</h4>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Nombre *</label>
+                            <input type="text" id="mini-cat-nombre" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Ej: Combustible, Peaje, etc">
+                            <p id="mini-cat-nombre-error" class="text-red-500 text-xs mt-1 hidden"></p>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Naturaleza *</label>
+                            <div class="flex gap-2">
+                                <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-100">
+                                    <input type="radio" name="mini-cat-naturaleza" value="GASTO" checked class="text-blue-600">
+                                    <span class="text-sm">Salida (Gasto)</span>
+                                </label>
+                                <label class="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-100">
+                                    <input type="radio" name="mini-cat-naturaleza" value="INGRESO" class="text-blue-600">
+                                    <span class="text-sm">Entrada (Ingreso)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-1">Color</label>
+                            <input type="color" id="mini-cat-color" value="#6B7280" class="w-full h-8 rounded cursor-pointer">
+                        </div>
+                        <div class="flex gap-2 justify-end">
+                            <button type="button" onclick="closeMiniCategoriaForm()" class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-200 rounded-lg">Cancelar</button>
+                            <button type="button" onclick="saveMiniCategoria(event)" id="btn-save-mini-cat" class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Guardar</button>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
-                        <select id="mov-tipo-form" required class="w-full px-3 py-2 border rounded-lg" onchange="onTipoChange()">
-                            <option value="INGRESO" ${data?.tipo == 'INGRESO' ? 'selected' : ''}>Ingreso</option>
-                            <option value="GASTO" ${data?.tipo == 'GASTO' ? 'selected' : ''}>Gasto</option>
-                            <option value="AJUSTE_ENTRADA" ${data?.tipo == 'AJUSTE_ENTRADA' ? 'selected' : ''}>Ajuste Entrada</option>
-                            <option value="AJUSTE_SALIDA" ${data?.tipo == 'AJUSTE_SALIDA' ? 'selected' : ''}>Ajuste Salida</option>
-                        </select>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Monto *</label>
+                        <input type="number" step="0.01" min="0.01" id="mov-monto" value="${data?.monto || ''}" required class="w-full px-3 py-2 border rounded-lg">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Monto *</label>
-                        <input type="number" step="0.01" id="mov-monto" value="${data?.monto || ''}" required class="w-full px-3 py-2 border rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Fecha *</label>
+                        <input type="date" id="mov-fecha" value="${data?.fecha || new Date().toISOString().split('T')[0]}" required class="w-full px-3 py-2 border rounded-lg">
                     </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                    <select id="mov-categoria" class="w-full px-3 py-2 border rounded-lg">
-                        <option value="">Sin categoría</option>
-                        ${categorias.map(c => `<option value="${c.id}" ${data?.categoria_id == c.id ? 'selected' : ''}>${c.nombre}</option>`).join('')}
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Fecha *</label>
-                    <input type="date" id="mov-fecha" value="${data?.fecha || new Date().toISOString().split('T')[0]}" required class="w-full px-3 py-2 border rounded-lg">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                    <textarea id="mov-descripcion" rows="2" class="w-full px-3 py-2 border rounded-lg">${data?.descripcion || ''}</textarea>
+                    <textarea id="mov-descripcion" rows="2" class="w-full px-3 py-2 border rounded-lg" placeholder="Descripción opcional...">${data?.descripcion || ''}</textarea>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Referencia</label>
-                    <input type="text" id="mov-referencia" value="${data?.referencia || ''}" class="w-full px-3 py-2 border rounded-lg">
+                    <input type="text" id="mov-referencia" value="${data?.referencia || ''}" class="w-full px-3 py-2 border rounded-lg" placeholder="N° comprobante, Factura, etc">
                 </div>
             </div>
+            <input type="hidden" id="mov-categoria-seleccionada" value="${data?.categoria_id || ''}">
             <div class="flex justify-end gap-2 mt-6">
                 <button type="button" onclick="closeModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                <button type="submit" class="btn-primary">Guardar</button>
+                <button type="submit" id="btn-guardar-movimiento" class="btn-primary">Guardar</button>
             </div>
         </form>
     `, 'lg');
+    
+    renderCategoriaCards(naturalezaActual, data?.categoria_id);
 }
 
-function onEmpresaChange() {
+function onEmpresaChangeForMov() {
     const empresaId = document.getElementById('mov-empresa-form').value;
     const cuentasFiltradas = cuentasForMov.filter(c => c.empresa_id == empresaId);
     document.getElementById('mov-cuenta').innerHTML = '<option value="">Seleccionar</option>' + cuentasFiltradas.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
 }
 
+function renderCategoriaCards(naturalezaFilter = null, selectedId = null) {
+    const container = document.getElementById('categoria-cards-container');
+    if (!container) return;
+    
+    let categorias = allCategorias;
+    if (naturalezaFilter) {
+        categorias = categorias.filter(c => c.tipo === naturalezaFilter);
+    }
+    
+    container.innerHTML = categorias.map(c => `
+        <div onclick="selectCategoria(${c.id}, '${c.tipo}')" 
+             class="categoria-card p-3 rounded-lg border-2 cursor-pointer transition-all text-center ${selectedId == c.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}"
+             data-id="${c.id}" data-tipo="${c.tipo}">
+            <div class="w-8 h-8 rounded-full mx-auto mb-1 flex items-center justify-center" style="background-color: ${c.color}">
+                <span class="text-white text-sm">${c.icono || c.nombre.charAt(0).toUpperCase()}</span>
+            </div>
+            <p class="text-xs font-medium text-gray-700 truncate">${c.nombre}</p>
+            <p class="text-xs ${c.tipo === 'INGRESO' ? 'text-green-600' : 'text-red-600'}">${c.tipo === 'INGRESO' ? 'Entrada' : 'Salida'}</p>
+        </div>
+    `).join('');
+}
+
+function selectCategoria(catId, catTipo) {
+    document.querySelectorAll('.categoria-card').forEach(c => c.classList.remove('border-blue-500', 'bg-blue-50'));
+    document.querySelector(`[data-id="${catId}"]`).classList.add('border-blue-500', 'bg-blue-50');
+    document.getElementById('mov-categoria-seleccionada').value = catId;
+    document.getElementById('categoria-error').classList.add('hidden');
+}
+
+function openMiniCategoriaForm() {
+    document.getElementById('mini-categoria-form').classList.remove('hidden');
+    document.getElementById('mini-cat-nombre').value = '';
+    document.getElementById('mini-cat-nombre-error').classList.add('hidden');
+    document.querySelector('input[name="mini-cat-naturaleza"][value="GASTO"]').checked = true;
+    document.getElementById('mini-cat-color').value = '#6B7280';
+}
+
+function closeMiniCategoriaForm() {
+    document.getElementById('mini-categoria-form').classList.add('hidden');
+}
+
+async function saveMiniCategoria(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-save-mini-cat');
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    
+    const nombre = document.getElementById('mini-cat-nombre').value.trim();
+    const tipo = document.querySelector('input[name="mini-cat-naturaleza"]:checked').value;
+    const color = document.getElementById('mini-cat-color').value;
+    
+    if (!nombre) {
+        document.getElementById('mini-cat-nombre-error').textContent = 'El nombre es requerido';
+        document.getElementById('mini-cat-nombre-error').classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Guardar';
+        return;
+    }
+    
+    try {
+        const result = await apiFetch('/categorias', {
+            method: 'POST',
+            body: JSON.stringify({ nombre, tipo, color, icono: nombre.charAt(0).toUpperCase() })
+        });
+        
+        // Add to allCategorias and re-render
+        allCategorias.push(result.data);
+        closeMiniCategoriaForm();
+        
+        // Re-render with current filter
+        const currentFilter = document.querySelector('input[name="categoria-filter"]')?.value || null;
+        renderCategoriaCards(currentFilter, result.data.id);
+        
+        // Auto-select the new category
+        selectCategoria(result.data.id, result.data.tipo);
+        showToast('Concepto creado y seleccionado');
+    } catch (e) {
+        document.getElementById('mini-cat-nombre-error').textContent = e.message;
+        document.getElementById('mini-cat-nombre-error').classList.remove('hidden');
+    }
+    
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+}
+
 async function saveMovimiento(e, id) {
     e.preventDefault();
+    
+    const catId = document.getElementById('mov-categoria-seleccionada').value;
+    if (!catId) {
+        document.getElementById('categoria-error').classList.remove('hidden');
+        return;
+    }
+    
+    const catSelected = allCategorias.find(c => c.id == catId);
+    if (!catSelected) return;
+    
+    const btn = document.getElementById('btn-guardar-movimiento');
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    
+    // Determinar tipo basado en la naturaleza de la categoria
+    const tipo = catSelected.tipo; // INGRESO o GASTO
+    
     const payload = {
         empresa_id: document.getElementById('mov-empresa-form').value,
         cuenta_id: document.getElementById('mov-cuenta').value,
-        tipo: document.getElementById('mov-tipo-form').value,
+        categoria_id: catId,
+        tipo: tipo,
         monto: document.getElementById('mov-monto').value,
-        categoria_id: document.getElementById('mov-categoria').value || null,
         fecha: document.getElementById('mov-fecha').value,
         descripcion: document.getElementById('mov-descripcion').value || null,
         referencia: document.getElementById('mov-referencia').value || null
     };
-    const data = id ? await apiFetch('/movimientos/' + id, { method: 'PUT', body: JSON.stringify(payload) }) : await apiFetch('/movimientos', { method: 'POST', body: JSON.stringify(payload) });
-    showToast(data.message);
-    closeModal();
-    loadMovimientos();
+    
+    try {
+        const data = id ? await apiFetch('/movimientos/' + id, { method: 'PUT', body: JSON.stringify(payload) }) : await apiFetch('/movimientos', { method: 'POST', body: JSON.stringify(payload) });
+        showToast(data.message);
+        closeModal();
+        loadMovimientos();
+    } catch (e) {
+        // Show error in form
+        showToast(e.message, 'error');
+    }
+    
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
 }
 
 function editMovimiento(m) { openMovimientoForm(m); }

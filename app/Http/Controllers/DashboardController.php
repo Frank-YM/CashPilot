@@ -52,7 +52,7 @@ class DashboardController extends Controller
         
         $allEmpresas = Empresa::where('estado', true)->orderBy('nombre')->get(['id', 'nombre']);
         $allCuentas = Cuenta::where('estado', true)->with('empresa:id,nombre')->orderBy('nombre')->get(['id', 'empresa_id', 'nombre', 'tipo']);
-        $allCategorias = Categoria::orderBy('nombre')->get(['id', 'nombre', 'tipo', 'color']);
+        $allCategorias = Categoria::orderBy('nombre')->get(['id', 'nombre', 'tipo', 'color', 'icono']);
         $totalTransferencias = Transferencia::count();
         
         return view('tesoreria.index', compact(

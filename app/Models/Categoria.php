@@ -10,7 +10,7 @@ class Categoria extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['nombre', 'tipo', 'color'];
+    protected $fillable = ['nombre', 'tipo', 'color', 'icono'];
 
     public function movimientos(): HasMany
     {

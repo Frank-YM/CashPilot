@@ -33,7 +33,7 @@ class CategoriaController extends Controller
             $query->where('tipo', $request->tipo);
         }
         
-        $categorias = $query->orderBy('nombre')->get(['id', 'nombre', 'tipo', 'color']);
+        $categorias = $query->orderBy('nombre')->get(['id', 'nombre', 'tipo', 'color', 'icono']);
         
         return response()->json($categorias);
     }
@@ -43,14 +43,15 @@ class CategoriaController extends Controller
         $validator = Validator::make($request->all(), [
             'nombre' => 'required|string|max:200|unique:categorias,nombre',
             'tipo' => 'required|in:INGRESO,GASTO',
-            'color' => 'nullable|string|size:7'
+            'color' => 'nullable|string|size:7',
+            'icono' => 'nullable|string|max:50'
         ]);
         
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
         
-        $categoria = Categoria::create($request->only('nombre', 'tipo', 'color'));
+        $categoria = Categoria::create($request->only('nombre', 'tipo', 'color', 'icono'));
         
         return response()->json([
             'success' => true,
@@ -66,14 +67,15 @@ class CategoriaController extends Controller
         $validator = Validator::make($request->all(), [
             'nombre' => 'required|string|max:200|unique:categorias,nombre,' . $categoria->id,
             'tipo' => 'required|in:INGRESO,GASTO',
-            'color' => 'nullable|string|size:7'
+            'color' => 'nullable|string|size:7',
+            'icono' => 'nullable|string|max:50'
         ]);
         
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
         
-        $categoria->update($request->only('nombre', 'tipo', 'color'));
+        $categoria->update($request->only('nombre', 'tipo', 'color', 'icono'));
         
         return response()->json([
             'success' => true,
